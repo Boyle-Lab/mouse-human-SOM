@@ -4,7 +4,12 @@
 # annotate CRMs and background regions.
 #
 ### It is best NOT to run this as a standalone script because of the need to
-### hand-curate the unassigned records found at line 32.
+### hand-curate the unassigned records from line 38.
+
+### PREREQUSITES:
+# dbSNP data (build 142 was used, from ftp://ftp.ncbi.nih.gov/snp/organisms/human_9606_b144_GRCh37p13/BED/)
+# HapMap linkage disequilibrium data
+# UCSC liftover chains
 
 # Directory containing dbSNP data
 DBSNP_DIR=/data/dbSNP/142
@@ -13,7 +18,7 @@ TGEN_DIR=/data/1000genomes/linkage
 # Directory containing liftover chains
 LIFT_DIR=/data/UCSC/LIFTOVER
 
-# Get the data from EMBL
+# Get the data from EMBL (This may need to be updated!)
 wget http://www.ebi.ac.uk/gwas/api/search/downloads/alternative
 
 # GWAS annotations in bed format (hg38 referenced)

@@ -3,6 +3,9 @@
 # Commands to generate CRM and background associations with GWAS Catalog lead SNPs
 # and linked SNPs
 
+## Before running this script, you will need to generate the source data by using the
+## commands in data/README
+
 DATA_DIR=../../data
 BG_DIR=../../background
 

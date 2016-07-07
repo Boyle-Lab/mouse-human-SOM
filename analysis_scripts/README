@@ -9,7 +9,8 @@ Large source datafiles must be retrieved from their respective primary sources:
 We have made an attemtp to indicate within the README scripts within each directory
 when such files are required and how they should be arranged within the directory
 tree. If something isn't working, first check that you have retrieved all of the
-prerequisite data!
+prerequisite data and supplied the correct locations within the shell scripts (See
+"DATA LOCATIONS")!
 
 DATA LOCATIONS:
 Many of the shell scripts contain variables near the top of the script to indicate
