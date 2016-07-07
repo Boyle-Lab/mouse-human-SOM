@@ -1,0 +1,118 @@
+#!/bin/bash
+
+# This file contains shell commands used to generate the data files used
+# for analyses of orthology, and species-specific gain and loss of CRMs.
+
+# Location of liftOver and reciprocal-best chains
+CHAIN_DIR=/data/UCSC/LIFTOVER
+# Location of CRM data (bed format)
+DATA_DIR=/data/mouseENCODE.new/results/8sets/regions
+# Location of BG data (bed format)
+BG_DIR=../background
+
+mkdir -pv {bnMapper,bnMapper_rbest}/{background,concat}
+
+# One-to-many liftover chains (most stringent for finding non-orthologous
+# regions)
+do_bnMapper.sh $DATA_DIR \*.out $CHAIN_DIR bnMapper 2> bnMapper.log
+do_bnMapper.sh $BG_DIR BG $CHAIN_DIR bnMapper/background
+
+for spp in hg19 mm9 ; do
+    cat bnMapper/unmapped/*.$spp.unmapped.bed > bnMapper/concat/ALL.$spp.unmapped.bed
+    cat bnMapper/lifted/*.$spp.lifted.bed > bnMapper/concat/ALL.$spp.lifted.bed
+    cat bnMapper/lifted/*.$spp.native.bed > bnMapper/concat/ALL.$spp.native.bed
+    cat bnMapper/background/unmapped/*.$spp.unmapped.bed > bnMapper/concat/BG.$spp.unmapped.bed
+    cat bnMapper/background/lifted/*.$spp.lifted.bed > bnMapper/concat/BG.$spp.lifted.bed
+    cat bnMapper/background/lifted/*.$spp.native.bed > bnMapper/concat/BG.$spp.native.bed
+done
+
+# Reciprocal-Best liftover chains (most stringent for finding orthologous
+# regions)
+do_bnMapper.sh $DATA_DIR \*.out $CHAIN_DIR bnMapper_rbest 1 2> bnMapper.rBest.log
+do_bnMapper.sh $BG_DIR BG $CHAIN_DIR bnMapper_rbest/background 1
+
+for spp in hg19 mm9 ; do
+    cat bnMapper_rbest/unmapped/*.$spp.unmapped.bed > bnMapper_rbest/concat/ALL.$spp.unmapped.bed
+    cat bnMapper_rbest/lifted/*.$spp.lifted.bed > bnMapper_rbest/concat/ALL.$spp.lifted.bed
+    cat bnMapper_rbest/lifted/*.$spp.native.bed > bnMapper_rbest/concat/ALL.$spp.native.bed
+    cat bnMapper_rbest/background/unmapped/*.$spp.unmapped.bed > bnMapper_rbest/concat/BG.$spp.unmapped.bed
+    cat bnMapper_rbest/background/lifted/*.$spp.lifted.bed > bnMapper_rbest/concat/BG.$spp.lifted.bed
+    cat bnMapper_rbest/background/lifted/*.$spp.native.bed > bnMapper_rbest/concat/BG.$spp.native.bed
+done
+
+# Generate a table of all peaks (per species) with their orthology status
+for SPP in hg19 mm9 ; do
+    if [ "$SPP" = "hg19" ]; then
+        SPP2=mm9
+    else
+        SPP2=hg19
+    fi
+    
+    assign_orthology.pl $DATA_DIR/concat/peaks.$SPP.bed ../orthology/bnMapper_rbest/concat/ALL.$SPP.native.bed ../orthology/bnMapper_rbest/concat/ALL.$SPP.lifted.bed ../orthology/bnMapper/concat/ALL.$SPP.unmapped.bed ../orthology/bnMapper_rbest/concat/ALL.$SPP2.native.bed > ../peak_data/peaks.$SPP.orthology.bed
+    assign_orthology.pl $BG_DIR/BG.$SPP.bed bnMapper_rbest/concat/BG.$SPP.native.bed bnMapper_rbest/concat/BG.$SPP.lifted.bed bnMapper/concat/BG.$SPP.unmapped.bed bnMapper_rbest/concat/BG.$SPP2.native.bed > $BG_DIR/BG.$SPP.orthology.bed
+done
+
+# Generate composite table
+for SPP in hg19 mm9 ; do
+    cat ../peak_data/peaks.$SPP.orthology.bed | awk -v SPP=$SPP '{printf "%s\t%s\n", SPP, $0}' >> peaks.ALL.orthology.txt
+    cat $BG_DIR/BG.$SPP.orthology.bed | awk -v SPP=$SPP '{printf "%s\t%s\n", SPP, $0}' >> BG.ALL.orthology.txt ;
+done
+
+
+# Analysis of gain and loss using three outgroups: horse, dog and elephant:
+
+# Horse
+mkdir -p equCab2/{background,concat}
+do_gain-loss.sh bnMapper/unmapped \*.out $CHAIN_DIR equCab2 equCab2 2> bnmapper_equCab2.log &
+do_gain-loss.sh bnMapper/background/unmapped BG $CHAIN_DIR equCab2/background equCab2
+for spp in hg19 mm9 ; do
+    cat equCab2/unmapped/*.$spp.unmapped.bed > equCab2/concat/ALL.$spp.unmapped.bed
+    cat equCab2/lifted/*.$spp.lifted.bed > equCab2/concat/ALL.$spp.lifted.bed
+    cat equCab2/lifted/*.$spp.native.bed > equCab2/concat/ALL.$spp.native.bed
+done
+build-concat-sets.bnmapper.sh equCab2/concat equCab2/concat
+
+# Dog
+mkdir -p canFam2/{background,concat}
+do_gain-loss.sh bnMapper/unmapped \*.out $CHAIN_DIR canFam2 canFam2 2> bnmapper_canFam2.log &
+do_gain-loss.sh bnMapper/background/unmapped BG $CHAIN_DIR canFam2/background canFam2
+for spp in hg19 mm9 ; do
+    cat canFam2/unmapped/*.$spp.unmapped.bed > canFam2/concat/ALL.$spp.unmapped.bed
+    cat canFam2/lifted/*.$spp.lifted.bed > canFam2/concat/ALL.$spp.lifted.bed
+    cat canFam2/lifted/*.$spp.native.bed > canFam2/concat/ALL.$spp.native.bed
+done
+build-concat-sets.bnmapper.sh canFam2/concat canFam2/concat
+
+# Elephant
+mkdir -p loxAfr3/{background,concat}
+do_gain-loss.sh bnMapper/unmapped \*.out $CHAIN_DIR loxAfr3 loxAfr3 2> bnmapper_loxAfr3.log &
+do_gain-loss.sh bnMapper/background/unmapped BG $CHAIN_DIR loxAfr3/background loxAfr3
+for spp in hg19 mm9 ; do 
+    cat loxAfr3/unmapped/*.$spp.unmapped.bed > loxAfr3/concat/ALL.$spp.unmapped.bed
+    cat loxAfr3/lifted/*.$spp.lifted.bed > loxAfr3/concat/ALL.$spp.lifted.bed
+    cat loxAfr3/lifted/*.$spp.native.bed > loxAfr3/concat/ALL.$spp.native.bed
+done
+
+# Concatenate the unmapped CRM datasets
+for SPP in hg19 mm9; do
+    cat bnMapper/concat/ALL.$SPP.unmapped.bed | awk -v SPP=$SPP '{printf "%s\t%s\n", SPP, $0}' >> bnMapper/concat/ALL.unmapped.txt
+    cat bnMapper/background/unmapped/BG.$SPP.unmapped.bed | awk -v SPP=$SPP '{printf "%s\t%s\n", SPP, $0}' >> bnMapper/background/ALL.unmapped.txt
+done
+
+for OG_SPP in equCab2 canFam2 loxAfr3; do
+    for SPP in hg19 mm9; do
+	cat $OG_SPP/concat/ALL.$SPP.lifted.bed | awk -v SPP=$SPP '{printf "%s\t%s\n", SPP, $0}' >> $OG_SPP/concat/ALL.lifted.bed
+	cat $OG_SPP/concat/ALL.$SPP.native.bed | awk -v SPP=$SPP '{printf "%s\t%s\n", SPP, $0}' >> $OG_SPP/concat/ALL.native.bed
+	cat $OG_SPP/concat/ALL.$SPP.unmapped.bed | awk -v SPP=$SPP '{printf "%s\t%s\n", SPP, $0}' >> $OG_SPP/concat/ALL.unmapped.bed
+    done
+done
+
+for OG_SPP in equCab2 canFam2 loxAfr3; do
+    for SPP in hg19 mm9; do
+        cat $OG_SPP/background/lifted/BG.$SPP.native.bed | awk -v SPP=$SPP '{printf "%s\t%s\n", SPP, $0}' >> $OG_SPP/background/ALL.BG.native.bed
+    done
+done
+
+# Infer gain/loss given the mappings
+infer_gain-loss.pl bnMapper/concat/ALL.unmapped.txt equCab2/concat/ALL.native.bed canFam2/concat/ALL.native.bed loxAfr3/concat/ALL.native.bed "(((hg19:1,mm9:3):2,(canFam2:4,equCab2:5):6):90,loxAfr3:7)" > peaks.ALL.unmapped.gain-loss.txt
+infer_gain-loss.pl bnMapper/background/ALL.unmapped.txt equCab2/background/ALL.BG.native.bed canFam2/background/ALL.BG.native.bed loxAfr3/background/ALL.BG.native.bed "(((hg19:1,mm9:3):2,(canFam2:4,equCab2:5):6):90,loxAfr3:7)" > BG.ALL.gain-loss.txt

@@ -1,0 +1,21 @@
+# These files contain information on gene annotations in human and mouse
+# based on the UCSC KnownGenes table. 
+
+knownGenes.hg19.by-symbol.gtf
+knownGenes.mm9.by-symbol.gtf
+# These were obtained directly from the UCSC table Browser
+
+knownGenes.hg19.by-symbol.gtf
+knownGenes.mm9.by-symbol.gtf
+# These were modified from the originals with gene symbols
+# in place of UCSC transcript ID's, using the appropriate
+# .tab file (see below)
+
+ucsc2geneId.hg19.tab
+ucsc2geneId.mm9.tab
+# These were obtained from the UCSC table browser
+
+# Human-mouse 1:1 orthologous genes were extracted from the modencode
+# common orthologs list (available at http://compbio.mit.edu/modencode/orthologs/modencode.common.orth.txt.gz)
+# with the following command:
+awk '{if ($2 == "human" && $3 == "mouse" && $6 == 1 && $7 == 1) print $0}' modencode.common.orth.txt > hg19-mm9.1-1-orthologs.txt

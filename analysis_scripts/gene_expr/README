@@ -1,0 +1,22 @@
+This folder contains the scripts and gene annotation files needed to recreate the
+RNA-seq gene expression datasets. Each subdirectory (kallisto and batch_norm)
+contains a complete set of scripts to generate the applicable data type:
+
+kallisto: do_kallisto_sleuth.sh
+batch_norm: do_bnorm-expr.sh
+
+Assuming all dependencies are installed in their default locations, these
+can be run on their own to recreate the gene expression source data used
+in all publishes analyses.
+
+Before running these, the ENCODE_data directory must be created and
+populated with fastq and/or bam files from ENCODE:
+
+mkdir -pv ENCODE_data/{hg19/{GM12878,K562},mm9/{CH12,MEL}}
+# ...now retrieve data from ENCODE into the appropriate
+# subdirectories
+
+# kallisto also requires genomic fasta files for each
+# species. These can be obtained from UCSC. You will need to
+# edit do_kallisto_sleuth.sh so the "FASTA_DIR" variable points to
+# the correct location for these files.

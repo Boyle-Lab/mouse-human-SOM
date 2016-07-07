@@ -1,0 +1,130 @@
+#!/bin/bash
+
+rawCountsComplete.dat = read.table("counts_matrix_complete.txt", header = TRUE, sep = "\t", stringsAsFactors = FALSE)
+rawCountsComplete = as.matrix(rawCountsComplete.dat[,3:6])
+rownames(rawCountsComplete)[which(rawCountsComplete.dat[,"mm_gene"] != "NULL")] = rawCountsComplete.dat[which(rawCountsComplete.dat[,"mm_gene"] != "NULL"),"mm_gene"]
+rownames(rawCountsComplete)[which(rawCountsComplete.dat[,"hg_gene"] != "NULL")] = rawCountsComplete.dat[which(rawCountsComplete.dat[,"hg_gene"] != "NULL"),"hg_gene"]
+
+geneDetailsComplete = read.table("gc_table_complete.txt", header = TRUE, sep = "\t", stringsAsFactors = FALSE)
+rownames(geneDetailsComplete)[which(rawCountsComplete.dat[,"mm_gene"] != "NULL")] = rawCountsComplete.dat[which(rawCountsComplete.dat[,"mm_gene"] != "NULL"),"mm_gene"]
+rownames(geneDetailsComplete)[which(rawCountsComplete.dat[,"hg_gene"] != "NULL")] = rawCountsComplete.dat[which(rawCountsComplete.dat[,"hg_gene"] != "NULL"),"hg_gene"]
+
+# Normalize for GC content
+require(EDASeq)
+GCNormCountsComplete = matrix(nrow = nrow(rawCountsComplete), ncol = ncol(rawCountsComplete))
+GCNormCountsComplete[,1:2] = withinLaneNormalization(rawCountsComplete[,1:2],geneDetailsComplete[,"mouse_GC"],which="loess",round=TRUE)
+GCNormCountsComplete[,3:4] = withinLaneNormalization(rawCountsComplete[,3:4],geneDetailsComplete[,"human_GC"],which="loess",round=TRUE)
+
+# Normalize for read depth
+require(edgeR)
+origColSumsComplete <- apply(rawCountsComplete, 2, function(x) sum(x))
+normFactorsComplete <- calcNormFactors(GCNormCountsComplete, method='TMM')
+colSumsComplete = apply(GCNormCountsComplete, 2, function(x) sum(x))
+normalizedColSumsComplete <- origColSumsComplete
+
+i = 1
+while (i<=length(colSumsComplete)){
+# originally while (i<length(colSumsComplete)){
+      normalizedColSumsComplete[i] <- origColSumsComplete[i]* normFactorsComplete[i]
+      i = i+1
+}
+
+meanDepthComplete <- mean(normalizedColSumsComplete)
+filteredDepthNormCountsComplete <- GCNormCountsComplete
+i = 1
+while (i<=ncol(filteredDepthNormCountsComplete)){
+      filteredDepthNormCountsComplete[,i] <- (GCNormCountsComplete[,i]/normalizedColSumsComplete[i])*meanDepthComplete
+      i = i+1
+}
+rownames(filteredDepthNormCountsComplete)[which(rawCountsComplete.dat[,"mm_gene"] != "NULL")] = rawCountsComplete.dat[which(rawCountsComplete.dat[,"mm_gene"] != "NULL"),"mm_gene"]
+rownames(filteredDepthNormCountsComplete)[which(rawCountsComplete.dat[,"hg_gene"] != "NULL")] = rawCountsComplete.dat[which(rawCountsComplete.dat[,"hg_gene"] != "NULL"),"hg_gene"]
+
+# Filter out rows for genes not expressed in any cell
+hasValsComplete = matrix(nrow = nrow(filteredDepthNormCountsComplete), ncol = ncol(filteredDepthNormCountsComplete))
+i = 1
+j = 1
+while (i <= nrow(filteredDepthNormCountsComplete)) {
+    if (filteredDepthNormCountsComplete[i,1] == 0 && filteredDepthNormCountsComplete[i,2] == 0 && filteredDepthNormCountsComplete[i,3] == 0 && filteredDepthNormCountsComplete[i,4] == 0) {
+        # do nothing
+    } else {
+        hasValsComplete[i,] = filteredDepthNormCountsComplete[i,]
+        j = j+1
+    }
+    i = i+1
+}
+
+filteredNamesComplete = rownames(rawCountsComplete[which(!is.na(hasValsComplete[,1])),])
+filteredDepthNormCountsComplete.no_zeroes = filteredDepthNormCountsComplete[filteredNamesComplete,]
+
+# Log transform the data
+filteredLogTransformedDepthNormCountsComplete <- log2(filteredDepthNormCountsComplete.no_zeroes+1)
+rownames(filteredLogTransformedDepthNormCountsComplete) <- filteredNamesComplete
+colnames(filteredLogTransformedDepthNormCountsComplete) <- colnames(rawCountsComplete)
+
+# Load the metadata and set up experimental design
+datasets = as.data.frame(scan("datasets.txt",list(setname="",seqBatch="",species="",tissue=""),sep="\t"))
+meta <- data.frame(seqBatch = datasets$seqBatch,tissue=datasets$tissue,species=datasets$species)
+design <- model.matrix(~1,data=meta)
+
+# Run ComBat
+require(sva)
+combatComplete = ComBat(dat=filteredLogTransformedDepthNormCountsComplete, batch=meta$seqBatch, mod=design, numCovs=NULL, par.prior=TRUE)
+
+# Reconstitute the original genes matrix, with normalized values
+normCountsComplete = rawCountsComplete  # Has row names
+normCountsComplete[filteredNamesComplete,] = 2^combatComplete
+
+# Zero out all cells that had zero observed counts in the non-normalized data
+normCountsComplete[which(rawCountsComplete == 0)] = 0
+
+# Make a copy of the original data table and replace the values with normalized
+normCountsComplete.out = rawCountsComplete.dat
+normCountsComplete.out[,3:6] = normCountsComplete
+
+##############
+# Convert counts to tpm (function stolen from sleuth package!)
+counts_to_tpm <- function(est_counts, eff_len) {
+  stopifnot( length(eff_len) == length(est_counts) )
+
+  which_valid <- which(eff_len > 0)
+
+  num <- (est_counts / eff_len)
+  num[-which_valid] <- 0
+  denom <- sum(num)
+
+  (1e6 * num) / denom
+}
+
+eff_lens.mm9.dat = read.table("eff_lens.mm9.dat", header = TRUE, stringsAsFactors = FALSE, sep = "\t")
+eff_lens.hg19.dat = read.table("eff_lens.hg19.dat", header = TRUE, stringsAsFactors = FALSE, sep = "\t")
+rownames(eff_lens.hg19.dat) = eff_lens.hg19.dat$target_id
+rownames(eff_lens.mm9.dat) = eff_lens.mm9.dat$target_id
+
+eff_len.hg19 = eff_lens.hg19.dat[normCountsComplete.out$hg_gene,2]
+eff_len.mm9 = eff_lens.mm9.dat[normCountsComplete.out$mm_gene,2]
+
+for (col in c("MEL", "CH12", "K562", "GM12878")) {
+    if (col == "MEL" || col == "CH12") {
+        eff_lens = eff_len.mm9
+    } else {
+        eff_lens = eff_len.hg19
+    }
+    normCountsComplete.out[,col] = counts_to_tpm(normCountsComplete.out[,col], eff_lens)
+}
+
+# Add quintiles to each row
+add_quintiles = function(src) {
+    m = src
+    for (i in 3:6) {
+        v = src[,i]
+        v[which(v > 0)] = cut(v[which(v > 0)], quantile(v[which(v > 0)], 0:5/5), labels = FALSE)
+        m = cbind(m, v)
+    }
+    colnames(m) = c(colnames(src), "q_M", "q_C", "q_K", "q_G")
+    return(m)
+}
+
+normCountsComplete.out = add_quintiles(normCountsComplete.out)
+
+# Write the table to disk
+write.table(normCountsComplete.out, file = "normCountsComplete.tab", row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE)

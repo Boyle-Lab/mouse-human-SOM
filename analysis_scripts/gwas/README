@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# Commands to generate CRM and background associations with GWAS Catalog lead SNPs
+# and linked SNPs
+
+DATA_DIR=../../data
+BG_DIR=../../background
+
+# Run bedtools intersect, keeping both SOM module annotations and SNP annotations...
+bedtools intersect -a $DATA_DIR/peaks.hg19.bed -b <(awk -F $'\t' '{printf "%s\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4, $5}' data/GWAS_linked.ALL.bed) -wo | sort | uniq > peaks_linked-gwas.txt
+bedtools intersect -a $BG_DIR/BG.hg19.bed -b <(awk -F $'\t' '{printf "%s\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4, $5}' data/GWAS_linked.ALL.bed) -wo | sort | uniq > bg_linked-gwas.txt
+
+# Intersect with regulomeDB
+python scrapeRegDBscore.py ../peaks_gwas-class-associations.bed > peaks_gwas.rdb.bed 2> peaks_gwas.rdb.err
+python scrapeRegDBscore.py ../bg_gwas-class-associations.bed > bg_gwas.rdb.bed 2> bg_gwas.rdb.err

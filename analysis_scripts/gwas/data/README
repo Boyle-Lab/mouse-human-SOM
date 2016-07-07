@@ -1,0 +1,74 @@
+#!/bin/bash
+
+# These commands will recreate the GWAS catalog/linked SNP data used to
+# annotate CRMs and background regions.
+#
+### It is best NOT to run this as a standalone script because of the need to
+### hand-curate the unassigned records found at line 32.
+
+# Directory containing dbSNP data
+DBSNP_DIR=/data/dbSNP/142
+# Directory containing 1000 Genomes LD data
+TGEN_DIR=/data/1000genomes/linkage
+# Directory containing liftover chains
+LIFT_DIR=/data/UCSC/LIFTOVER
+
+# Get the data from EMBL
+wget http://www.ebi.ac.uk/gwas/api/search/downloads/alternative
+
+# GWAS annotations in bed format (hg38 referenced)
+grep -v "DATE ADDED TO CATALOG" alternative | awk -F $'\t' '{if ($12 != "" && $13 != "") printf "chr%s\t%s\t%s\trs%s\t%s;%s\n", $12, $13-1, $13, $24, $35, $36}' | sed 's/chr23/chrX/' > gwas-catalog.hg38.bed
+
+# Split by chromosome
+for chr in $(awk '{print $1}' gwas-catalog.hg38.bed | sort | uniq) ; do
+    awk -v CHR="$chr" '{if ($1 == CHR) print $0}' gwas-catalog.hg38.bed > gwas-catalog.hg38.$chr.bed
+done
+
+# Initial remapping based on rsid
+for chr in $(awk '{print $1}' gwas-catalog.hg38.bed | sort | uniq | sed 's/chr//') ; do
+    remap_gwas.pl <(zcat $DBSNP_DIR/bed_chr_$chr.bed.gz) gwas-catalog.hg38.chr$chr.bed >> gwas-catalog.hg19.rsid.bed 2>> gwas-catalog.hg19.rsid.unmapped
+done
+
+# Check unmapped records for merged rsids
+reassign_merged_rsid.pl gwas-catalog.hg19.rsid.unmapped > gwas-catalog.hg19.rsid.unmapped.merge-reassigned 2> reassign.log
+
+##########################################################################
+# reassign_merged_rsid.pl prints a "No result..." line when an rsid
+# is not found in dbSNP. This is usually because there is some
+# anomaly in the rsid. To include these in further analysis, issue the
+# commands on the commented lines and perform manual curation to resolve
+# the issues before proceeding...
+
+#grep "No result" reassign.log | sed 's/No result found for: //' > unassigned.bed
+
+## unassigned.bed needs to be hand-curated to correct/remove any anomolous records
+
+## For thoroughness sake, check to see if any of these records have been merged
+#reassign_merged_rsid.pl unassigned.bed  # Found 0 to reassign...
+
+## ...then roll these into the main flow
+#cat unassigned.bed >> gwas-catalog.hg19.rsid.unmapped.merge-reassigned
+
+###########################################################################
+
+# Remap merged records based on rsid
+for target_file in $DBSNP_DIR/bed*.gz ; do remap_gwas.pl <(zcat $target_file) gwas-catalog.hg19.rsid.unmapped.merge-reassigned >> gwas-catalog.hg19.rsid.unmapped.merge-reassigned.mapped 2>> /dev/null ; done
+# Roll the results into the hg19-referenced bed
+cat gwas-catalog.hg19.rsid.unmapped.merge-reassigned.mapped >> gwas-catalog.hg19.rsid.bed
+
+# Filter out the reassigned lines from the unassigned file and map the rest via liftOver
+filter_gwas.pl gwas-catalog.hg19.rsid.unmapped.merge-reassigned gwas-catalog.hg19.rsid.unmapped.merge-reassigned.mapped > gwas-catalog.hg19.rsid.unmapped.unmapped
+liftOver gwas-catalog.hg19.rsid.unmapped.unmapped $LIFT_DIR/hg38ToHg19.over.chain.gz gwas-catalog.hg19.liftover.bed gwas-catalog.hg19.liftover.unmapped -bedPlus=5 -tab
+
+# Roll all into the final hg19-referenced bed
+cat gwas-catalog.hg19.rsid.bed gwas-catalog.hg19.liftover.bed | sort | uniq > gwas-catalog.hg19.complete.bed
+
+# Assciate lead SNPs with linked SNPs
+for CHR in chr{{1..22},X} ; do
+    echo "Working on chromosome $CHR"
+    fname=$(printf "ld_%s_CEU.txt.gz" $CHR)
+    awk -v chr=$CHR '{if ($1 == chr) print $0}' gwas-catalog.hg19.complete.bed > tmp
+    build_gwas_linkage_blocks.pl tmp <(zcat $TGEN_DIR/$fname) > GWAS_linked.$CHR.bed
+    rm tmp
+done
+cat GWAS_linked.chr*.bed | grep -v "#" >> GWAS_linked.ALL.bed

@@ -1,0 +1,72 @@
+#!/usr/bin/Rscript --vanilla
+
+require(sleuth)
+require(reshape)
+
+add_quintiles = function(src) {
+    m = src
+    for (i in 12:13) {
+    v = src[,i]
+    v[which(v > 0)] = cut(v[which(v > 0)], quantile(v[which(v > 0)], 0:5/5), labels = FALSE)
+    m = cbind(m, v)
+    }
+    return(m)
+}
+
+# hg19 data
+s2c = read.table("samples.hg19.txt", header = TRUE, stringsAsFactors = FALSE)
+so <- sleuth_prep(s2c, ~ cell)
+norm_obs = kallisto_table(so)
+
+est_counts = cast(norm_obs, target_id ~ sample, value = "est_counts")
+est_counts = cbind(est_counts, unlist(lapply(1:nrow(est_counts), function(i) mean(c(est_counts[i,2], est_counts[i,3])))))
+est_counts = cbind(est_counts, unlist(lapply(1:nrow(est_counts), function(i) mean(c(est_counts[i,4], est_counts[i,5])))))
+colnames(est_counts)[2:5] = paste(colnames(est_counts)[2:5], "est_counts", sep = ".")
+colnames(est_counts)[6:7] = paste(unique(norm_obs$cell), "est_counts", sep = ".")
+
+tpm = cast(norm_obs, target_id ~ sample, value = "tpm")
+tpm = cbind(tpm, unlist(lapply(1:nrow(tpm), function(i) mean(c(tpm[i,2], tpm[i,3])))))
+tpm = cbind(tpm, unlist(lapply(1:nrow(tpm), function(i) mean(c(tpm[i,4], tpm[i,5])))))
+colnames(tpm)[2:5] = paste(colnames(tpm)[2:5], "tpm", sep = ".")
+colnames(tpm)[6:7] = paste(unique(norm_obs$cell), "tpm", sep = ".")
+
+norm_genes = cbind(est_counts, tpm[,2:7])
+tmp = cast(norm_obs, target_id ~ sample, value = "eff_len")  # this is inefficient!
+norm_genes = cbind(norm_genes, tmp[,2])
+tmp = cast(norm_obs, target_id ~ sample, value = "len")  # this is inefficient!
+norm_genes = cbind(norm_genes, tmp[,2])
+colnames(norm_genes)[14:15] = c("eff_len", "len")
+
+norm_genes = add_quintiles(norm_genes)
+colnames(norm_genes)[16:17] = c("q_g", "q_k")
+
+write.table(norm_genes, file = "norm_genes.hg19.tab", col.names = TRUE, row.names = FALSE, sep = "\t", quote = FALSE)
+
+# mm9 data
+s2c.mm = read.table("samples.mm9.txt", header = TRUE, stringsAsFactors = FALSE)
+so.mm <- sleuth_prep(s2c.mm, ~ cell)
+norm_obs.mm = kallisto_table(so.mm)
+
+est_counts.mm = cast(norm_obs.mm, target_id ~ sample, value = "est_counts")
+est_counts.mm = cbind(est_counts.mm, unlist(lapply(1:nrow(est_counts.mm), function(i) mean(c(est_counts.mm[i,2], est_counts.mm[i,3])))))
+est_counts.mm = cbind(est_counts.mm, unlist(lapply(1:nrow(est_counts.mm), function(i) mean(c(est_counts.mm[i,4], est_counts.mm[i,5])))))
+colnames(est_counts.mm)[2:5] = paste(colnames(est_counts.mm)[2:5], "est_counts.mm", sep = ".")
+colnames(est_counts.mm)[6:7] = paste(unique(norm_obs.mm$cell), "est_counts.mm", sep = ".")
+
+tpm.mm = cast(norm_obs.mm, target_id ~ sample, value = "tpm")
+tpm.mm = cbind(tpm.mm, unlist(lapply(1:nrow(tpm.mm), function(i) mean(c(tpm.mm[i,2], tpm.mm[i,3])))))
+tpm.mm = cbind(tpm.mm, unlist(lapply(1:nrow(tpm.mm), function(i) mean(c(tpm.mm[i,4], tpm.mm[i,5])))))
+colnames(tpm.mm)[2:5] = paste(colnames(tpm.mm)[2:5], "tpm.mm", sep = ".")
+colnames(tpm.mm)[6:7] = paste(unique(norm_obs.mm$cell), "tpm.mm", sep = ".")
+
+norm_genes.mm = cbind(est_counts.mm, tpm.mm[,2:7])
+tmp = cast(norm_obs.mm, target_id ~ sample, value = "eff_len")  # this is inefficient!
+norm_genes.mm = cbind(norm_genes.mm, tmp[,2])
+tmp = cast(norm_obs.mm, target_id ~ sample, value = "len")  # this is inefficient!
+norm_genes.mm = cbind(norm_genes.mm, tmp[,2])
+colnames(norm_genes.mm)[14:15] = c("eff_len", "len")
+
+norm_genes.mm = add_quintiles(norm_genes.mm)
+colnames(norm_genes.mm)[16:17] = c("q_c", "q_m")
+
+write.table(norm_genes.mm, file = "norm_genes.mm9.tab", col.names = TRUE, row.names = FALSE, sep = "\t", quote = FALSE)

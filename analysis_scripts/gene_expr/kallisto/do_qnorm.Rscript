@@ -1,0 +1,22 @@
+#!/usr/bin/Rscript --vanilla
+
+require("preprocessCore")
+
+dat = read.table("ALL.norm_genes.dat", header = TRUE, sep = "\t", stringsAsFactors = FALSE)
+expr_data = as.matrix(dat[,3:6])
+# Filter out log2 expression values < -9 (abs value 0.001953125)
+expr_data[which(expr_data < 0.001953125 & expr_data > 0)] = 0
+expr_data.norm = normalize.quantiles(expr_data, copy=TRUE)
+dat.new = cbind(dat[,1:2], expr_data.norm)
+add_quintiles_2 = function(src) {
+    m = src
+    for (i in 3:6) {
+        v = src[,i]
+        v[which(v > 0)] = cut(v[which(v > 0)], quantile(v[which(v > 0)], 0:5/5), labels = FALSE)
+        m = cbind(m, v)
+    }
+    colnames(m) = c(colnames(src), "q_M", "q_C", "q_K", "q_G")
+    return(m)
+}
+dat.new = add_quintiles_2(dat.new)
+write.table(dat.new, file = "ALL.norm_genes.qnorm.dat", quote = FALSE, col.names = TRUE, row.names = FALSE, sep = "\t")
