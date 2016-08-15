@@ -2,7 +2,7 @@
 
 require("preprocessCore")
 
-dat = read.table("ALL.norm_genes.dat", header = TRUE, sep = "\t", stringsAsFactors = FALSE)
+dat = read.table("tmp", header = TRUE, sep = "\t", stringsAsFactors = FALSE)
 expr_data = as.matrix(dat[,3:6])
 # Filter out log2 expression values < -9 (abs value 0.001953125)
 expr_data[which(expr_data < 0.001953125 & expr_data > 0)] = 0
@@ -19,4 +19,4 @@ add_quintiles_2 = function(src) {
     return(m)
 }
 dat.new = add_quintiles_2(dat.new)
-write.table(dat.new, file = "ALL.norm_genes.qnorm.dat", quote = FALSE, col.names = TRUE, row.names = FALSE, sep = "\t")
+write.table(dat.new, file = "tmp", quote = FALSE, col.names = TRUE, row.names = FALSE, sep = "\t")

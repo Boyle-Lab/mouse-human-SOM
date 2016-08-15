@@ -38,5 +38,11 @@ head -n 1 norm_genes.hg19.total.tab | sed 's/#//' | awk -v spp="species" '{print
 for SPP in hg19 mm9 ; do grep -v "^#" norm_genes.$SPP.total.tab | awk -v spp=$SPP '{printf "%s\t%s\n", spp, $0}' >> ALL.norm_genes.tab ; done
 ./build_kallisto_table.pl ALL.norm_genes.tab ../genes/hg19-mm9.1-1-orthologs.txt > ALL.norm_genes.dat
 
-# Prepare quantile-normalized version
+# Because R doesn't like headers commented with '#'...
+sed 's/^#//' ALL.norm_genes.dat > tmp
+
+# Prepare quantile-normalized version (reads and writes data from tmp)
 ./do_qnorm.Rscript
+head -n1 ALL.norm_genes.dat > ALL.norm_genes.qnorm.dat
+tail -n $(( $(cat tmp | wc -l) - 1 )) tmp >> ALL.norm_genes.qnorm.dat
+rm tmp
